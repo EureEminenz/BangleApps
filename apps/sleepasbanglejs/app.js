@@ -1,6 +1,5 @@
 exports.pushMessage = function(event) {
-    print("recieved")
-    print(event)
+    print("recieved");
 }
 
 //variables for accleration data
