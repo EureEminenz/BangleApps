@@ -43,7 +43,7 @@
           title:event.name||"Call", body:"Incoming call\n"+event.number});
         require("messages").pushMessage(event);
       },
-      "sleeptracking":function(){ Object.assign(event,{t:"add",positive:true, negative:true});require("sleepasbanglejs").pushMessage(event); },
+      "sleeptracking":function(){ Object.assign(event);require("sleepasbanglejs").pushMessage(event); },
     };
     var h = HANDLERS[event.t];
     if (h) h(); else console.log("GB Unknown",event);
