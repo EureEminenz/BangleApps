@@ -1,4 +1,5 @@
 exports.pushMessage = function(event) {
+    print("recieved")
     print(event)
 }
 
