@@ -1,7 +1,3 @@
-exports.pushMessage = function(event) {
-    print("recieved");
-}
-
 //variables for accleration data
 var max_raw=0;
 var current_max_raw_data=0;
