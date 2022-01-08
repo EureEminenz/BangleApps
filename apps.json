@@ -5465,5 +5465,17 @@
       {"name":"ruuviwatch.app.js","url":"ruuviwatch.app.js"},
       {"name":"ruuviwatch.img","url":"ruuviwatch.app-icon.js","evaluate":true}
     ]
+  },
+  { "id": "sleepasbanglejs",
+    "name": "SleepAsBangleJS",
+    "shortName":"SABJS",
+    "icon": "app.png",
+    "version":"0.01",
+    "description": "Connects SleepAsAndroid with BangleJS via Gadgetbridge, so Gadgetbridge needs to be present on Android Phone as well as Android Integration on Smartwatch.",
+    "tags": "",
+    "storage": [
+      {"name":"sleepasbanglejs.app.js","url":"app.js"},
+      {"name":"sleepasbanglejs.img","url":"app-icon.js","evaluate":true}
+    ]
   }
 ]
