@@ -1,5 +1,6 @@
-/*
+
 exports.pushMessage = function(event) {
-    print(event)
+    print("received")
+    return load("sleepasbanglejs.app.js");
 }
-*/
+
