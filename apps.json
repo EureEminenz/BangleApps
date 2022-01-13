@@ -5477,10 +5477,13 @@
     "readme": "README.md",
     "description": "Connects SleepAsAndroid with BangleJS via Gadgetbridge, so Gadgetbridge needs to be present on Android Phone as well as Android Integration on Smartwatch.",
     "tags": "",
+    "dependencies": {"android":"app"},
     "storage": [
-      {"name":"sleepasbanglejs.app.js","url":"app.js"},
+      {"name":"sleepasbanglejs.app.js","url":"app.js"},      
       {"name":"sleepasbanglejs.img","url":"app-icon.js","evaluate":true},
       {"name":"sleepasbanglejs","url":"lib.js"}
+      {"name":"sleepasbanglejs.settings.js","url":"settings.js"},
+      {"name":"sleepasbanglejs.boot.js","url":"boot.js"}
     ]
   }
 ]
