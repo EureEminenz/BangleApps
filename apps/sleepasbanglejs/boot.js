@@ -9,10 +9,10 @@ global.GB = (event) => {
       start_alarm();//TODO
     }
     if (event.t=="notify"){
-      print("notify at SABJS");//Debug
+      //print("notify at SABJS");//Debug
     }
     if (event.t=="act"){
-      print("act at SABJS");//Debug
+      //print("act at SABJS");//Debug
         if (typeof event.batch_size== "number"){
             if (event.batch_size==0){
                 set_batch_size(1);
@@ -76,7 +76,7 @@ function store_data(){
     if (current_max_raw_data==0){
         current_max_raw_data=G;
     }
-    batch_array.push(current_max_raw_data);
+    batch_array.push(current_max_raw_data.toFixed(2));
     current_max_raw_data=0;
     if (batch_array.length>=batch_size){
       send_batch();
@@ -84,7 +84,7 @@ function store_data(){
 }
 //sends batch via bluetooth. recieving intent is com.urbandroid.sleep.watch.DATA_UPDATE
 function send_batch(){
-    print("Batch sent");
+    //print("Batch sent");
     Bluetooth.println(JSON.stringify({t:"accel_batch", batch:batch_array}));
     batch_array=[];
 }
