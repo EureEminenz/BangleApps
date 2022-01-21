@@ -1,243 +1,260 @@
 //this part needs to be in boot.js!!!
-
-var _GB = global.GB;
-global.GB = (event) => {
-    // feed a copy to other handlers if there were any
-    if (_GB) setTimeout(_GB,0,Object.assign({},event));
-    if (event.t=="sleeptracking"){
-        print("sleeptracking at SABJS");//Debug
-      start_alarm();//TODO
-    }
-    if (event.t=="notify"){
-      //print("notify at SABJS");//Debug
-    }
-    if (event.t=="act"){
-      //print("act at SABJS");//Debug
-        if (typeof event.batch_size== "number"){
-            if (event.batch_size==0){
-                set_batch_size(1);
-            }
-            else{
-                set_batch_size(event.batch_size);
-            }
+(function(){
+    var _GB = global.GB;
+    global.GB = (event) => {
+        // feed a copy to other handlers if there were any
+        if (_GB) setTimeout(_GB,0,Object.assign({},event));
+        if (event.t=="sleeptracking"){
+            print("sleeptracking at SABJS");//Debug
+        startAlarm();//TODO
         }
-        if (typeof event.accel=="boolean"){
-            if (event.accel){
-                if(!movement_tracking_running){
-                    
-                start_movement_tracking();
-                }              
-            }
-            else{
-                stop_movement_tracking();
-            }
+        if (event.t=="notify"){
+        //print("notify at SABJS");//Debug
         }
-        if (typeof event.hrm=="boolean"){
-            if (event.hrm&&event.accel){
-                if(!hr_tracking_running){
-                    start_hr_tracking();
+        if (event.t=="act"){
+        //print("act at SABJS");//Debug
+            if (typeof event.batch_size== "number"){
+                if (event.batch_size==0){
+                    setBatchSize(1);
                 }
-                
+                else{
+                    setBatchSize(event.batch_size);
+                }
+            }
+            if (typeof event.accel=="boolean"){
+                if (event.accel){
+                    if(!movementTrackingRunning){
+                    startMovementTracking();
+                    }
+                }
+                else{
+                    stopMovementTracking();
+                }
+            }
+            if (typeof event.hrm=="boolean"){
+                if (event.hrm&&event.accel){
+                    if(!hrTrackingRunning){
+                        startHrTracking();
+                    }
+                }
+                else{
+                    stopHrTracking();
+                }
+            }
+        }
+
+    };
+
+    //debug
+    var boot=false;
+
+    //variables for accleration data
+    var maxRaw=0;
+    var currentMaxRawData=0;
+    var batchArray=[];
+    var batchSize=0;
+    var storeInterval;
+    var mag=0;
+    const G=9.80665;
+
+    var movementTrackingRunning=false;
+
+    var hrTrackingRunning=false;
+    var hrPauseInterval;
+
+    //variables for vibration
+    var vibrationInterval;
+
+    //variables for display
+    var brightness=0;
+    var undimmTime=10000;//in ms
+    var undimmSteps=100;
+    var undimmInterval;
+    var optionsLcdTimeout;//in ms
+
+
+
+    //saves currentMaxRawData to array, checks for reach of batchSize. If reached, sendBatch() is triggered
+    function storeData(){
+        if (currentMaxRawData==0){
+            currentMaxRawData=G;
+        }
+        batchArray.push(currentMaxRawData.toFixed(2));
+        currentMaxRawData=0;
+        if (batchArray.length>=batchSize){
+        sendBatch();
+        }
+    }
+    //sends batch via bluetooth. recieving intent is com.urbandroid.sleep.watch.DATA_UPDATE
+    function sendBatch(){
+        //print("Batch sent");
+        Bluetooth.println(JSON.stringify({t:"accel_batch", batch:batchArray}));
+        batchArray=[];
+    }
+    //sets batchSize. expected is len(batch). Sending intent is com.urbandroid.sleep.watch.SET_BATCH_SIZE
+    function setBatchSize(newsize){
+        batchSize=newsize;
+    }
+    //accel.mag is geometric average in G. gets converted to m/s². Only max gets saved.
+    function accelHandler(accel){
+        maxRaw=accel.mag*G;
+        if (maxRaw > currentMaxRawData) {
+            currentMaxRawData = maxRaw;
+        }
+        //Debug
+    //print("accel");
+    }
+
+    //initializing variables for accel_tracking. 
+    function startAccelTracking(){
+        maxRaw=0;
+        currentMaxRawData=0;
+        batchArray=[];
+        storeInterval=setInterval(storeData,10000);
+        mag=0;
+        Bangle.on('accel', accelHandler);
+    }
+
+    function stopAccelTracking(){
+        Bangle.removeListener('accel', accelHandler);
+        if (typeof storeInterval!="undefined"){
+            clearInterval(storeInterval);
+            storeInterval = undefined;
+        }
+    }
+    //sending intent is com.urbandroid.sleep.watch.START_TRACKING. hrTracking is bool, default=false
+    function startMovementTracking(hrTracking){
+        hrTracking = (typeof hrTracking !== 'undefined') ?  hrTracking : false;
+        movementTrackingRunning=true;
+        startAccelTracking();
+        if (hrTracking){
+            startHrTracking();
+        }
+    }
+    //sending intent is com.urbandroid.sleep.watch.STOP_TRACKING
+    function stopMovementTracking(){
+        movementTrackingRunning=false;
+        stopAccelTracking();
+        stopHrTracking();
+    }
+
+    //sending intent is com.urbandroid.sleep.watch.START_ALARM. delay is optional and in ms
+    function startAlarm(delay){
+        optionsLcdTimeout=Bangle.getOptions().backlightTimeout;
+        delay = (typeof delay !== 'undefined') ?  delay : 0;
+        setTimeout(setVibrateInterval, delay);
+        setTimeout(showAlarm, delay);
+    }
+
+    //show alarm on watch with options do snooz and dismiss
+    function showAlarm(){
+        Bangle.setLCDBrightness(0);
+        Bangle.setLCDPower(1);
+        startUndimm();
+        Bangle.setLCDTimeout(30);
+        Bangle.setLocked(false);
+        E.showPrompt("Alert",{//LANG
+        title:"Alert",//LANG
+        buttons : {"snooze":"snooze","dismiss":"dismiss"} //LANG
+        }).then(function(v) {
+            switch(v){
+                case "snooze":{
+                    snoozeFromWatch();
+                    break;
+                }
+                case "dismiss":{
+                    dismissFromWatch();
+                    break;
+                }
+            }
+        });
+    }
+
+    function undimmLcd(){
+        Bangle.setLCDBrightness(brightness);
+        print(brightness);
+        if (brightness>=1){
+            print("max");
+            resetUndimmInterval();
+        }
+        brightness+=1/undimmSteps;
+    }
+    function startUndimm(){
+        undimmInterval=setInterval(undimmLcd,undimmTime/undimmSteps);
+    }
+
+    //receiving intent is com.urbandroid.sleep.watch.SNOOZE_FROM_WATCH
+    function snoozeFromWatch(){
+        print("snooze");//debug
+    }
+    //recieving intent is com.urbandroid.sleep.watch.DISMISS_FROM_WATCH
+    function dismissFromWatch(){
+        print("dismiss");//debug
+    }
+    //vibrate in given interval, defaul=1000ms
+    function setVibrateInterval(interval){
+        interval = (typeof interval !== 'undefined') ?  interval : 1000; //default=1s
+        vibrationInterval=setInterval(function(){Bangle.buzz();},interval);
+    }
+
+    function resetUndimmInterval(){
+        if(typeof undimmInterval!=='undefined'){
+            clearInterval(undimmInterval);
+            undimmInterval=undefined;
+            brightness=0;
+        }
+    }
+    //sending intent is com.urbandroid.sleep.watch.STOP_ALARM
+    function stopAlarm(){
+        clearInterval(vibrationInterval);
+        vibrationInterval = undefined;
+        resetUndimmInterval();
+        Bangle.setLCDTimeout(optionsLcdTimeout/1000);
+    }
+
+    //every 100s start hrm again and see if confidence is still high enough
+    function hrmHandler(hrm){
+        if (hrm.confidence>80){
+            if (boot){
+                Bangle.setHRMPower(0, "sleepasbanglejs");
             }
             else{
-                stop_hr_tracking();
+                Bangle.setHRMPower(0);
             }
+            pauseHrTracking(10000);
         }
+        //TODO actualy do something with this data
     }
 
-};
-
-//variables for accleration data
-var max_raw=0;
-var current_max_raw_data=0;
-var batch_array=[];
-var batch_size=0;
-var store_interval;
-var mag=0;
-const G=9.80665;
-
-var movement_tracking_running=false;
-
-var hr_tracking_running=false;
-var hr_pause_interval;
-
-//variables for vibration
-var vibration_interval;
-
-//variables for display
-var brightness=0;
-var undimm_time=10000;//in ms
-var undimm_steps=100;
-var undimm_interval;
-var options_lcdtimeout;//in ms
-
-//saves current_max_raw_data to array, checks for reach of batch_size. If reached, send_batch() is triggered
-function store_data(){
-    if (current_max_raw_data==0){
-        current_max_raw_data=G;
-    }
-    batch_array.push(current_max_raw_data.toFixed(2));
-    current_max_raw_data=0;
-    if (batch_array.length>=batch_size){
-      send_batch();
-    }
-}
-//sends batch via bluetooth. recieving intent is com.urbandroid.sleep.watch.DATA_UPDATE
-function send_batch(){
-    //print("Batch sent");
-    Bluetooth.println(JSON.stringify({t:"accel_batch", batch:batch_array}));
-    batch_array=[];
-}
-//sets batch_size. expected is len(batch). Sending intent is com.urbandroid.sleep.watch.SET_BATCH_SIZE
-function set_batch_size(newsize){
-    batch_size=newsize;
-}
-//accel.mag is geometric average in G. gets converted to m/s². Only max gets saved.
-function accelHandler(accel){
-    max_raw=accel.mag*G;
-    if (max_raw > current_max_raw_data) {
-        current_max_raw_data = max_raw;
-    }
-    //Debug
-  //print("accel");
-
-}
-
-//initializing variables for accel_tracking. 
-function start_accel_tracking(){
-    max_raw=0;
-    current_max_raw_data=0;
-    batch_array=[];
-    //batch_size=12;//standard batch size is 12//should already be set.
-    store_interval=setInterval(store_data,10000);//every 10s current max gets stored.
-    mag=0;
-    Bangle.on('accel', accelHandler);//start listening for acceleration
-    
-}
-
-function stop_accel_tracking(){
-    Bangle.removeListener('accel', accelHandler);//stop listening for acceleration
-    if (typeof store_interval!="undefined"){
-        clearInterval(store_interval);//stop saving accel_data
-        store_interval = undefined;
-    }
-    
-}
-//sending intent is com.urbandroid.sleep.watch.START_TRACKING. hr_tracking is bool, default=false
-function start_movement_tracking(hr_tracking){
-    hr_tracking = (typeof hr_tracking !== 'undefined') ?  hr_tracking : false; //default=false
-    movement_tracking_running=true;
-    start_accel_tracking();
-    if (hr_tracking){
-        start_hr_tracking();
-    }
-}
-//sending intent is com.urbandroid.sleep.watch.STOP_TRACKING
-function stop_movement_tracking(){
-    movement_tracking_running=false;
-    stop_accel_tracking();
-    stop_hr_tracking();
-}
-
-//sending intent is com.urbandroid.sleep.watch.START_ALARM. delay is optional and in ms
-function start_alarm(delay){
-    options_lcdtimeout=Bangle.getOptions().backlightTimeout; //store options value for later reset
-    delay = (typeof delay !== 'undefined') ?  delay : 0; //if not defined, delay should be 0
-    setTimeout(set_vibrate_interval, delay);
-    setTimeout(show_alarm, delay);
-}
-
-//show alarm on watch with options do snooz and dismiss
-function show_alarm(){
-    Bangle.setLCDBrightness(0);
-    Bangle.setLCDPower(1);//power on Display
-    start_undimm();
-    Bangle.setLCDTimeout(30);//set Timeout to 30s
-    Bangle.setLocked(false);//unlock screen
-    E.showPrompt("Alert",{//LANG
-    title:"Alert",//LANG
-    buttons : {"snooze":"snooze","dismiss":"dismiss"} //LANG
-    }).then(function(v) {
-        switch(v){
-            case "snooze":{
-                snooze_from_watch();
-                break;
-            }
-            case "dismiss":{
-                dismiss_from_watch();
-                break;
-            }
+    //start listening for hrm data
+    function startHrTracking(){
+        hrTrackingRunning=true;
+        if (boot){
+            Bangle.setHRMPower(1, "sleepasbanglejs");
         }
-    });
-}
-
-function undimm_lcd(){
-    
-    Bangle.setLCDBrightness(brightness);
-    print(brightness);
-    if (brightness>=1){
-        print("max");
-        reset_undimm_interval();
+        else{
+            Bangle.setHRMPower(1);
+        }
+        Bangle.on('HRM', hrmHandler);
     }
-    brightness+=1/undimm_steps;
-}
-function start_undimm(){
-    undimm_interval=setInterval(undimm_lcd,undimm_time/undimm_steps);
-}
 
-//receiving intent is com.urbandroid.sleep.watch.SNOOZE_FROM_WATCH
-function snooze_from_watch(){
-    print("snooze");//debug
-}
-//recieving intent is com.urbandroid.sleep.watch.DISMISS_FROM_WATCH
-function dismiss_from_watch(){
-    print("dismiss");//debug
-}
-//vibrate in given interval, defaul=1000ms
-function set_vibrate_interval(interval){
-    interval = (typeof interval !== 'undefined') ?  interval : 1000; //default=1s
-    vibration_interval=setInterval(function(){Bangle.buzz();},interval);
-}
-
-function reset_undimm_interval(){
-    if(typeof undimm_interval!=='undefined'){
-        clearInterval(undimm_interval);
-        undimm_interval=undefined;
-        brightness=0;
+    //every ms hrm gets restarted
+    function pauseHrTracking(ms){    
+        hrPauseInterval=setInterval(startHrTracking,ms);
     }
-}
-//sending intent is com.urbandroid.sleep.watch.STOP_ALARM
-function stop_alarm(){
-    clearInterval(vibration_interval);
-    vibration_interval = undefined;
-    reset_undimm_interval();
-    Bangle.setLCDTimeout(options_lcdtimeout/1000);//restore saved values and convert from ms to s
-}
 
-function hrmHandler(hrm){
-    if (hrm.confidence>80){
-        Bangle.setHRMPower(0, "sleepasbanglejs");//stop sensor //TODO replace with Bangle.setHRMPower(false, "sleepasbanglejs"); to prevent other apps from disabeling hrm. Could only be done when in apploader
-        pause_hr_tracking(10000);//every 100s start hrm again and see if confidence is still high enough
+    //stop listening for hrm data
+    function stopHrTracking(){
+        hrTrackingRunning=false;
+        if (boot){
+            Bangle.setHRMPower(0, "sleepasbanglejs");
+        }
+        else{
+            Bangle.setHRMPower(0);
+        }
+        Bangle.removeListener('HRM', hrmHandler);
     }
-    //TODO actualy do something with this data
-}
-
-function start_hr_tracking(){
-    hr_tracking_running=true;
-    Bangle.setHRMPower(1, "sleepasbanglejs");//activate sensor //TODO replace with Bangle.setHRMPower(true, "sleepasbanglejs"); to prevent other apps from disabeling hrm. Could only be done when in apploader
-    Bangle.on('HRM', hrmHandler);//start listening for hrm data
-}
-
-function pause_hr_tracking(ms){
-    
-    hr_pause_interval=setInterval(start_hr_tracking,ms);//every ms hrm gets restarted
-}
-
-function stop_hr_tracking(){
-    hr_tracking_running=false;
-    Bangle.setHRMPower(0, "sleepasbanglejs");//stop sensor //TODO replace with Bangle.setHRMPower(false, "sleepasbanglejs"); to prevent other apps from disabeling hrm. Could only be done when in apploader
-    Bangle.removeListener('HRM', hrmHandler);//stop listening for hrm data
-}
+})();
 
 /*testcommand
 GB({"t":"sleeptracking","id":1592721712,"src":"WhatsApp","title":"Sample Group: Sam","body":"This is a test WhatsApp message"})
@@ -248,7 +265,7 @@ actually sent when Sensor_test:
 */
 /*TODO
  * Logging
- * Return Values from start_movement_tracking and stop_movement_tracking
+ * Return Values from startMovementTracking and stopMovementTracking
  * Make vibration more gentle, perhaps taking into account brightness value. Therefor should rename brightness to intensity
 */
 /* TODO Commands from SleepAsAndroid
